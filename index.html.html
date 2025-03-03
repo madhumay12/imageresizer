@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Resizer App - 960x600</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .app-container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+        .info-box {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 10px 15px;
+            margin-bottom: 20px;
+            border-radius: 0 4px 4px 0;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .dimensions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .dimensions div {
+            flex: 1;
+        }
+        .dimensions input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            background-color: #f1f1f1;
+            cursor: not-allowed;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            display: block;
+            width: 100%;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        .preview-container {
+            margin-top: 30px;
+            text-align: center;
+        }
+        .preview-container h2 {
+            margin-bottom: 15px;
+        }
+        .preview-image-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+        }
+        .image-preview {
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+            background: white;
+            max-width: 300px;
+        }
+        .image-preview h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+        .image-preview img {
+            max-width: 100%;
+            max-height: 200px;
+        }
+        .download-btn {
+            margin-top: 10px;
+            background-color: #27ae60;
+        }
+        .download-btn:hover {
+            background-color: #2ecc71;
+        }
+        .error {
+            color: #e74c3c;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <h1>Image Resizer - 960x600</h1>
+        
+        <div class="info-box">
+            <p>This app resizes uploaded images to maintain a 960x600 pixel aspect ratio (16:10). 
+            The image will be resized to fit within these dimensions while preserving its original proportions.</p>
+        </div>
+        
+        <div class="input-group">
+            <label for="image-input">Select an image:</label>
+            <input type="file" id="image-input" accept="image/*">
+            <div id="file-error" class="error"></div>
+        </div>
+        
+        <div class="dimensions">
+            <div>
+                <label for="width">Target Width (px):</label>
+                <input type="text" id="width" value="960" readonly>
+            </div>
+            <div>
+                <label for="height">Target Height (px):</label>
+                <input type="text" id="height" value="600" readonly>
+            </div>
+        </div>
+        
+        <button id="resize-btn" disabled>Resize Image</button>
+        
+        <div class="preview-container" id="preview-container" style="display: none;">
+            <h2>Preview</h2>
+            <div class="preview-image-container">
+                <div class="image-preview" id="original-preview">
+                    <h3>Original</h3>
+                    <img id="original-img">
+                    <p id="original-dimensions"></p>
+                </div>
+                <div class="image-preview" id="resized-preview">
+                    <h3>Resized (960x600)</h3>
+                    <img id="resized-img">
+                    <p id="resized-dimensions"></p>
+                    <button id="download-btn" class="download-btn">Download Resized Image</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM elements
+        const imageInput = document.getElementById('image-input');
+        const resizeBtn = document.getElementById('resize-btn');
+        const previewContainer = document.getElementById('preview-container');
+        const originalImg = document.getElementById('original-img');
+        const resizedImg = document.getElementById('resized-img');
+        const originalDimensions = document.getElementById('original-dimensions');
+        const resizedDimensions = document.getElementById('resized-dimensions');
+        const downloadBtn = document.getElementById('download-btn');
+        const fileError = document.getElementById('file-error');
+
+        // Fixed target dimensions
+        const TARGET_WIDTH = 960;
+        const TARGET_HEIGHT = 600;
+        const TARGET_RATIO = TARGET_WIDTH / TARGET_HEIGHT;
+
+        // Original image information
+        let originalImage = null;
+        let originalWidth = 0;
+        let originalHeight = 0;
+
+        // Handle file input change
+        imageInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            
+            if (!file) {
+                resetApp();
+                return;
+            }
+            
+            // Validate file type
+            if (!file.type.match('image.*')) {
+                fileError.textContent = 'Please select an image file (JPEG, PNG, etc.)';
+                resetApp();
+                return;
+            }
+            
+            fileError.textContent = '';
+            
+            // Create object URL for the selected image
+            const imageUrl = URL.createObjectURL(file);
+            
+            // Load the image to get its original dimensions
+            originalImage = new Image();
+            originalImage.src = imageUrl;
+            
+            originalImage.onload = function() {
+                originalWidth = originalImage.width;
+                originalHeight = originalImage.height;
+                
+                // Update UI
+                originalImg.src = imageUrl;
+                originalDimensions.textContent = `${originalWidth} × ${originalHeight} pixels`;
+                
+                // Enable the resize button
+                resizeBtn.disabled = false;
+            };
+        });
+
+        // Handle resize button click
+        resizeBtn.addEventListener('click', function() {
+            if (!originalImage) return;
+            
+            // Calculate dimensions that fit the target aspect ratio
+            const dimensions = calculateDimensions(originalWidth, originalHeight, TARGET_WIDTH, TARGET_HEIGHT);
+            
+            // Perform the resizing
+            resizeImage(originalImage, dimensions.width, dimensions.height);
+            
+            // Show the preview container
+            previewContainer.style.display = 'block';
+        });
+
+        // Calculate dimensions that maintain the target aspect ratio
+        function calculateDimensions(originalWidth, originalHeight, targetWidth, targetHeight) {
+            const originalRatio = originalWidth / originalHeight;
+            const targetRatio = targetWidth / targetHeight;
+            
+            let width, height;
+            
+            if (originalRatio > targetRatio) {
+                // Image is wider than target ratio
+                width = targetWidth;
+                height = Math.round(width / originalRatio);
+            } else {
+                // Image is taller than target ratio
+                height = targetHeight;
+                width = Math.round(height * originalRatio);
+            }
+            
+            return {
+                width: width,
+                height: height
+            };
+        }
+
+        // Resize the image
+        function resizeImage(image, width, height) {
+            // Create a canvas element
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Draw the image on the canvas with the new dimensions
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(image, 0, 0, width, height);
+            
+            // Get the resized image data
+            const resizedDataUrl = canvas.toDataURL('image/png');
+            
+            // Update the UI
+            resizedImg.src = resizedDataUrl;
+            resizedDimensions.textContent = `${width} × ${height} pixels`;
+            
+            // Set up the download button
+            downloadBtn.onclick = function() {
+                const link = document.createElement('a');
+                link.download = 'resized-image.png';
+                link.href = resizedDataUrl;
+                link.click();
+            };
+        }
+
+        // Reset the app state
+        function resetApp() {
+            originalImage = null;
+            originalWidth = 0;
+            originalHeight = 0;
+            
+            resizeBtn.disabled = true;
+            previewContainer.style.display = 'none';
+            
+            originalImg.src = '';
+            resizedImg.src = '';
+            originalDimensions.textContent = '';
+            resizedDimensions.textContent = '';
+        }
+    </script>
+</body>
+</html>
